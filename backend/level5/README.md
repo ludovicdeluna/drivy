@@ -8,3 +8,10 @@ Reminder:
 - the insurance receives its part of the commission
 - the assistance receives its part of the commission
 - drivy receives its part of the commission, plus the deductible reduction
+
+# How to test
+
+This is my answer to the challenge above. To validate this challenge, install
+ruby 2.3 or higher and run from this folder :
+- `ruby ./drivy_test.rb` to run tests
+- `./main.rb` to run the challenge
