@@ -17,3 +17,10 @@ The rental price is the sum of:
 - a distance component: the number of km multiplied by the car's price per km
 
 Write code that generates `output.json` from `data.json`
+
+# How to test
+
+This is my answer to the challenge above. To validate this challenge, install
+ruby 2.3 or higher and run from this folder :
+- `ruby ./drivy_test.rb` to run tests
+- `./main.rb` to run the challange

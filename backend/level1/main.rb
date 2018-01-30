@@ -1,3 +1,6 @@
+#!/usr/bin/env ruby
 require "json"
+require_relative "drivy"
 
-# your code
+data = JSON.parse(File.read("data.json"))
+puts JSON.pretty_generate(Drivy.gains(data))
