@@ -13,3 +13,10 @@ Compute the delta amounts for each actor.
 [1] the delta amount is basically the difference between:
 - the amount the actor owes (or is owed) *after* the modification
 - the amount the actor has already paid (or been given) *before* the modification
+
+# How to test
+
+This is my answer to the challenge above. To validate this challenge, install
+ruby 2.3 or higher and run from this folder :
+- `ruby ./drivy_test.rb` to run tests
+- `./main.rb` to run the challenge
