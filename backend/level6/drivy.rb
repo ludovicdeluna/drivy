@@ -15,35 +15,35 @@ module Drivy
     def modifications
       {
         "rental_modifications" => rental_changes.map do |(id, rental_change)|
-          with_type, pricing = Pricing.delta_by_actor(rental_change)
+          pricing = Pricing.delta_by_actor(rental_change)
           {
             "id" => id,
             "rental_id" => rental_change.rental_id,
             "actions" => [
               {
                 "who" => "driver",
-                "type" => with_type[Pricing::DEBIT],
-                "amount" => pricing.driver
+                "type" => pricing.driver.operation,
+                "amount" => pricing.driver.amount
               },
               {
                 "who" => "owner",
-                "type" => with_type[Pricing::CREDIT],
-                "amount" => pricing.owner
+                "type" => pricing.owner.operation,
+                "amount" => pricing.owner.amount
               },
               {
                 "who" => "insurance",
-                "type" => with_type[Pricing::CREDIT],
-                "amount" => pricing.insurance
+                "type" => pricing.insurance.operation,
+                "amount" => pricing.insurance.amount
               },
               {
                 "who" => "assistance",
-                "type" => with_type[Pricing::CREDIT],
-                "amount" => pricing.assitance
+                "type" => pricing.assitance.operation,
+                "amount" => pricing.assitance.amount
               },
               {
                 "who" => "drivy",
-                "type" => with_type[Pricing::CREDIT],
-                "amount" => pricing.drivy
+                "type" => pricing.drivy.operation,
+                "amount" => pricing.drivy.amount
               }
             ]
           }
@@ -57,22 +57,17 @@ module Drivy
 
     # Discount
     PER_DAY_DISCOUT = [
-      {over: 10, percent: 50},
-      {over: 4, percent: 30},
-      {over: 1, percent: 10},
-      {over: 0, percent: 0}
+      {over: 10,  percent: 0.5},
+      {over: 4,   percent: 0.3},
+      {over: 1,   percent: 0.1},
+      {over: 0,   percent: 0.0}
     ]
 
     # Fees share
     COMMISSION = 0.3
     ASSURANCE_SHARE = 0.5
-    ASSISTANCE_COST = 100 # € By Day (be aware: README give a bad value)
-    DEDUCTIBLE_COST = 400 # € By Day (be aware: README give a bad value)
-
-    # Bank operation
-    DEBIT = "debit"
-    CREDIT = "credit"
-    BANK_OP_INVERSE = {DEBIT => CREDIT, CREDIT => DEBIT}
+    ASSISTANCE_COST = 100 # Eurocents By Day
+    DEDUCTIBLE_COST = 400 # Eurocents By Day
 
     def initialize(rental)
       @rental = rental
@@ -83,9 +78,9 @@ module Drivy
       prev_over = nil
       PER_DAY_DISCOUT.inject(0) do |acc, discount|
         next acc unless duration > discount[:over]
-        days = (prev_over ? prev_over : duration) - discount[:over]
+        days = (prev_over || duration) - discount[:over]
         prev_over = discount[:over]
-        acc += (price_per_day - price_per_day * (discount[:percent] / 100.0)) * days
+        (price_per_day - price_per_day * discount[:percent]) * days + acc
       end.round(0)
     end
 
@@ -94,15 +89,12 @@ module Drivy
     def self.delta_by_actor(rental_change)
       original = Pricing.new(rental_change.rental).by_actor
       pricing = Pricing.new(rental_change.generate_rental).by_actor
-      add_charges = original.driver < pricing.driver
+      positive = pricing.driver.amount > original.driver.amount ? 1 : -1
       pricing.members.each do |k|
-        pricing[k] = add_charges ? pricing[k] - original[k] : original[k] - pricing[k]
+        pricing[k].amount = (pricing[k].amount - original[k].amount) * positive
+        pricing[k].reverse! unless positive == 1
       end
-      return fn_operation_type(add_charges), pricing
-    end
-
-    def self.fn_operation_type(add_charges)
-      -> (operation) { add_charges ? operation : BANK_OP_INVERSE[operation] }
+      return pricing
     end
 
     def commission
@@ -134,13 +126,27 @@ module Drivy
     end
 
     def by_actor
-      Struct.new(:driver, :owner, :insurance, :assitance, :drivy).new(
-        price + deductible_reduction,             # driver
-        price - commission,                       # owner
-        fees["insurance_fee"],                    # insurance
-        fees["assistance_fee"],                   # assitance
-        fees["drivy_fee"] + deductible_reduction  # drivy
+      Actor.new(
+        Entry.new(Entry::DEBIT, price + deductible_reduction),              # driver
+        Entry.new(Entry::CREDIT, price - commission),                       # owner
+        Entry.new(Entry::CREDIT, fees["insurance_fee"]),                    # insurance
+        Entry.new(Entry::CREDIT, fees["assistance_fee"]),                   # assitance
+        Entry.new(Entry::CREDIT, fees["drivy_fee"] + deductible_reduction)  # drivy
       )
+    end
+  end
+
+  class Pricing
+    class Actor < Struct.new(:driver, :owner, :insurance, :assitance, :drivy); end
+    class Entry < Struct.new(:operation, :amount)
+      # Bank operation
+      DEBIT = "debit"
+      CREDIT = "credit"
+      REVERSE_BANK_OP = {CREDIT => DEBIT, DEBIT => CREDIT}
+
+      def reverse!
+        self.operation = REVERSE_BANK_OP[operation]
+      end
     end
   end
 
